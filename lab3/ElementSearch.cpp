@@ -136,22 +136,20 @@ int findElement(const vector<int>& arr, int target){
 
 
 int main(){
-    vector<int> input_arr = {1, 2, 3, 4, 5, 6, 7, 4, 8, -11};
+    int target = 120;
 
-    writeVector("files/arr.bin", input_arr);
-
-    vector<int> arr = readVector("files/arr.bin");
+    vector<int> arr = readVector("files/array_99.bin");
 
     int res;
     
     auto start = chrono::high_resolution_clock::now();
 
-    res = findElement(arr, 4);
+    res = findElement(arr, target);
 
     auto end = chrono::high_resolution_clock::now();
 
     cout << chrono::duration_cast<chrono::nanoseconds>(end - start).count() << endl;
-    printVector(input_arr);
+    // printVector(arr);
     cout << res << endl;
 
 
@@ -159,11 +157,11 @@ int main(){
     
     start = chrono::high_resolution_clock::now();
 
-    res = findElementParallel(arr, 4, 5);
+    res = findElementParallel(arr, target, 10);
 
     end = chrono::high_resolution_clock::now();
 
     cout << chrono::duration_cast<chrono::nanoseconds>(end - start).count() << endl;
-    printVector(input_arr);
+    // printVector(arr);
     cout << res << endl;
 }

@@ -171,38 +171,9 @@ vector<double> multiplyMatricesParallel(const vector<double>& m1,
 
 int main(){
 
-    vector<double> input1 = {
-        1, 2, 3, 4, 5, 5, 4, 3, 2, 1,
-        1, 2, 3, 4, 5, 5, 4, 3, 2, 1,
-        1, 2, 3, 4, 5, 5, 4, 3, 2, 1,
-        1, 2, 3, 4, 5, 5, 4, 3, 2, 1,
-        1, 2, 3, 4, 5, 5, 4, 3, 2, 1,
-        1, 2, 3, 4, 5, 5, 4, 3, 2, 1,
-        1, 2, 3, 4, 5, 5, 4, 3, 2, 1,
-        1, 2, 3, 4, 5, 5, 4, 3, 2, 1,
-        1, 2, 3, 4, 5, 5, 4, 3, 2, 1,
-        1, 2, 3, 4, 5, 5, 4, 3, 2, 1
-    };
-
-    vector<double> input2 = {
-        1, 2, 3, 4, 5, 5, 4, 3, 2, 1,
-        1, 2, 3, 4, 5, 5, 4, 3, 2, 1,
-        1, 2, 3, 4, 5, 5, 4, 3, 2, 1,
-        1, 2, 3, 4, 5, 5, 4, 3, 2, 1,
-        1, 2, 3, 4, 5, 5, 4, 3, 2, 1,
-        1, 2, 3, 4, 5, 5, 4, 3, 2, 1,
-        1, 2, 3, 4, 5, 5, 4, 3, 2, 1,
-        1, 2, 3, 4, 5, 5, 4, 3, 2, 1,
-        1, 2, 3, 4, 5, 5, 4, 3, 2, 1,
-        1, 2, 3, 4, 5, 5, 4, 3, 2, 1
-    };
-
-    writeMatrix("files/m1.bin", input1);
-    writeMatrix("files/m2.bin", input2);
-
     size_t size1, size2;
-    vector<double> matrix1 = readMatrix("files/m1.bin", size1);
-    vector<double> matrix2 = readMatrix("files/m2.bin", size2);
+    vector<double> matrix1 = readMatrix("files/mat1_small.bin", size1);
+    vector<double> matrix2 = readMatrix("files/mat2_small.bin", size2);
 
     vector<double> res;
     
