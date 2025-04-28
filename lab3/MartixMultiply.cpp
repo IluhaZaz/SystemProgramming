@@ -172,8 +172,8 @@ vector<double> multiplyMatricesParallel(const vector<double>& m1,
 int main(){
 
     size_t size1, size2;
-    vector<double> matrix1 = readMatrix("files/mat1_small.bin", size1);
-    vector<double> matrix2 = readMatrix("files/mat2_small.bin", size2);
+    vector<double> matrix1 = readMatrix("files/mat1_big.bin", size1);
+    vector<double> matrix2 = readMatrix("files/mat2_big.bin", size2);
 
     vector<double> res;
     
@@ -184,7 +184,7 @@ int main(){
     auto end = chrono::high_resolution_clock::now();
 
     cout << chrono::duration_cast<chrono::nanoseconds>(end - start).count() << endl;
-    printMatrix(res, size1);
+    // printMatrix(res, size1);
 
 
     res.clear();
@@ -196,7 +196,7 @@ int main(){
     end = chrono::high_resolution_clock::now();
 
     cout << chrono::duration_cast<chrono::nanoseconds>(end - start).count() << endl;
-    printMatrix(res, size1);
+    // printMatrix(res, size1);
 
     return 0;
 }
