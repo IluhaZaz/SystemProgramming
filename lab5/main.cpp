@@ -2,14 +2,13 @@
 #include <fstream>
 #include <vector>
 #include <sstream>
-#include <algorithm>
 #include <unordered_map>
-#include <iomanip>
 #include <sys/types.h>
 #include <grp.h>
+#include <unistd.h>
+#include <pwd.h>
 
 using namespace std;
-
 
 struct UserInfo {
     string username;
@@ -18,12 +17,6 @@ struct UserInfo {
     gid_t gid;
     string home_dir;
     string shell;
-};
-
-struct GroupInfo {
-    string name;
-    gid_t gid;
-    vector<string> members;
 };
 
 vector<UserInfo> read_passwd() {
@@ -55,74 +48,47 @@ vector<UserInfo> read_passwd() {
     return users;
 }
 
-string get_shadow_hash(const string& username) {
-    ifstream shadow_file("/etc/shadow");
-    string line;
-
-    while (getline(shadow_file, line)) {
-        stringstream ss(line);
-        string part;
-        vector<string> parts;
-
-        while (getline(ss, part, ':')) {
-            parts.push_back(part);
-        }
-
-        if (parts.size() >= 2 && parts[0] == username) {
-            return parts[1];
-        }
+vector<string> get_user_groups(const string& username) {
+    vector<string> groups;
+    gid_t primary_gid = 0;
+    
+    // Получаем информацию о пользователе
+    struct passwd *pw = getpwnam(username.c_str());
+    if (!pw) {
+        cerr << "User not found: " << username << endl;
+        return groups;
     }
-
-    return "no_access_or_no_password";
-}
-
-unordered_map<gid_t, GroupInfo> read_groups() {
-    unordered_map<gid_t, GroupInfo> groups;
-    ifstream group_file("/etc/group");
-    string line;
-
-    while (getline(group_file, line)) {
-        stringstream ss(line);
-        string part;
-        vector<string> parts;
-
-        while (getline(ss, part, ':')) {
-            parts.push_back(part);
-        }
-
-        if (parts.size() >= 4) {
-            GroupInfo group;
-            group.name = parts[0];
-            group.gid = stoi(parts[2]);
-            
-            stringstream members_ss(parts[3]);
-            string member;
-            while (getline(members_ss, member, ',')) {
-                group.members.push_back(member);
-            }
-            
-            groups[group.gid] = group;
-        }
+    primary_gid = pw->pw_gid;
+    
+    // Добавляем первичную группу
+    struct group *gr = getgrgid(primary_gid);
+    if (gr) {
+        groups.push_back(gr->gr_name);
     }
-
-    return groups;
-}
-
-vector<gid_t> get_user_groups(uid_t uid) {
-    vector<gid_t> groups;
+    
+    // Получаем дополнительные группы
     int ngroups = 0;
+    getgrouplist(username.c_str(), primary_gid, nullptr, &ngroups);
     
-    getgrouplist("", uid, nullptr, &ngroups);
+    if (ngroups > 0) {
+        vector<gid_t> gids(ngroups);
+        if (getgrouplist(username.c_str(), primary_gid, gids.data(), &ngroups) != -1) {
+            for (int i = 0; i < ngroups; i++) {
+                if (gids[i] != primary_gid) {  // Уже добавили первичную группу
+                    gr = getgrgid(gids[i]);
+                    if (gr) {
+                        groups.push_back(gr->gr_name);
+                    }
+                }
+            }
+        }
+    }
     
-    vector<gid_t> group_list(ngroups);
-    getgrouplist("", uid, group_list.data(), &ngroups);
-    
-    return group_list;
+    return groups;
 }
 
 int main() {
     auto users = read_passwd();
-    auto groups_map = read_groups();
 
     for (const auto& user : users) {
         cout << "Username: " << user.username << "\n";
@@ -130,24 +96,19 @@ int main() {
         cout << "GID: " << user.gid << "\n";
         cout << "Home directory: " << user.home_dir << "\n";
         
-        string real_hash = get_shadow_hash(user.username);
-        cout << "Password hash: " << 
-            (user.password_hash == "x" ? real_hash : user.password_hash) << "\n";
-
-        auto user_groups = get_user_groups(user.uid);
+        auto groups = get_user_groups(user.username);
         cout << "Groups: ";
+        bool is_admin = false;
         
-        for (auto gid : user_groups) {
-            if (groups_map.count(gid)) {
-                const auto& group = groups_map[gid];
-                cout << group.name;
-                
-                if (!group.members.empty() && group.members[0] == user.username) {
-                    cout << "(admin)";
-                }
-                
-                cout << " ";
+        for (const auto& group : groups) {
+            cout << group << " ";
+            if (group == "sudo" || group == "wheel") {
+                is_admin = true;
             }
+        }
+        
+        if (is_admin) {
+            cout << "\nStatus: ADMINISTRATOR";
         }
         
         cout << "\n\n";
