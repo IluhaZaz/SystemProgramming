@@ -19,20 +19,10 @@ struct UserInfo {
 };
 
 bool get_shadow_info(const string& username, string& hash) {
-    uid_t original_ruid = getuid();
-    uid_t original_euid = geteuid();
-
-    if (original_euid != 0 && seteuid(0) == -1) {
-        return false;
-    }
 
     struct spwd *sp = getspnam(username.c_str());
     if (sp) {
         hash = sp->sp_pwdp;
-    }
-
-    if (original_euid != 0) {
-        seteuid(original_euid);
     }
 
     return sp != nullptr;
@@ -75,6 +65,8 @@ vector<UserInfo> get_users_info(bool try_shadow) {
         users.push_back(user);
     }
     endpwent();
+
+    setuid(getuid());
 
     return users;
 }
