@@ -1,118 +1,111 @@
 #include <iostream>
-#include <fstream>
 #include <vector>
-#include <sstream>
-#include <unordered_map>
 #include <sys/types.h>
-#include <grp.h>
-#include <unistd.h>
 #include <pwd.h>
+#include <grp.h>
+#include <shadow.h>
+#include <unistd.h>
+#include <cstring>
+#include <cerrno>
 
 using namespace std;
 
 struct UserInfo {
     string username;
-    string password_hash;
     uid_t uid;
-    gid_t gid;
     string home_dir;
-    string shell;
+    string password_hash;
+    vector<pair<string, bool>> groups;
 };
 
-vector<UserInfo> read_passwd() {
-    vector<UserInfo> users;
-    ifstream passwd_file("/etc/passwd");
-    string line;
+bool get_shadow_info(const string& username, string& hash) {
+    uid_t original_ruid = getuid();
+    uid_t original_euid = geteuid();
 
-    while (getline(passwd_file, line)) {
-        stringstream ss(line);
-        string part;
-        vector<string> parts;
-
-        while (getline(ss, part, ':')) {
-            parts.push_back(part);
-        }
-
-        if (parts.size() >= 7) {
-            UserInfo user;
-            user.username = parts[0];
-            user.password_hash = parts[1];
-            user.uid = stoi(parts[2]);
-            user.gid = stoi(parts[3]);
-            user.home_dir = parts[5];
-            user.shell = parts[6];
-            users.push_back(user);
-        }
+    if (original_euid != 0 && seteuid(0) == -1) {
+        return false;
     }
+
+    struct spwd *sp = getspnam(username.c_str());
+    if (sp) {
+        hash = sp->sp_pwdp;
+    }
+
+    if (original_euid != 0) {
+        seteuid(original_euid);
+    }
+
+    return sp != nullptr;
+}
+
+vector<UserInfo> get_users_info(bool try_shadow) {
+    vector<UserInfo> users;
+
+    setpwent();
+    struct passwd *pwd;
+    while ((pwd = getpwent()) != nullptr) {
+        UserInfo user;
+        user.username = pwd->pw_name;
+        user.uid = pwd->pw_uid;
+        user.home_dir = pwd->pw_dir;
+
+        if (try_shadow) {
+            if (!get_shadow_info(pwd->pw_name, user.password_hash)) {
+                user.password_hash = "? (access denied)";
+            }
+        } else {
+            user.password_hash = "? (use sudo to see)";
+        }
+
+        int ngroups = 0;
+        getgrouplist(pwd->pw_name, pwd->pw_gid, nullptr, &ngroups);
+        if (ngroups > 0) {
+            gid_t groups[ngroups];
+            getgrouplist(pwd->pw_name, pwd->pw_gid, groups, &ngroups);
+
+            for (int i = 0; i < ngroups; i++) {
+                struct group *grp = getgrgid(groups[i]);
+                if (grp) {
+                    bool is_admin = (grp->gr_gid == pwd->pw_gid);
+                    user.groups.emplace_back(grp->gr_name, is_admin);
+                }
+            }
+        }
+
+        users.push_back(user);
+    }
+    endpwent();
 
     return users;
 }
 
-vector<string> get_user_groups(const string& username) {
-    vector<string> groups;
-    gid_t primary_gid = 0;
-    
-    // Получаем информацию о пользователе
-    struct passwd *pw = getpwnam(username.c_str());
-    if (!pw) {
-        cerr << "User not found: " << username << endl;
-        return groups;
-    }
-    primary_gid = pw->pw_gid;
-    
-    // Добавляем первичную группу
-    struct group *gr = getgrgid(primary_gid);
-    if (gr) {
-        groups.push_back(gr->gr_name);
-    }
-    
-    // Получаем дополнительные группы
-    int ngroups = 0;
-    getgrouplist(username.c_str(), primary_gid, nullptr, &ngroups);
-    
-    if (ngroups > 0) {
-        vector<gid_t> gids(ngroups);
-        if (getgrouplist(username.c_str(), primary_gid, gids.data(), &ngroups) != -1) {
-            for (int i = 0; i < ngroups; i++) {
-                if (gids[i] != primary_gid) {  // Уже добавили первичную группу
-                    gr = getgrgid(gids[i]);
-                    if (gr) {
-                        groups.push_back(gr->gr_name);
-                    }
-                }
-            }
+void print_users_info(const vector<UserInfo>& users) {
+    for (const auto& user : users) {
+        cout << "Username: " << user.username << "\n"
+             << "UID: " << user.uid << "\n"
+             << "Home: " << user.home_dir << "\n"
+             << "Password: " << user.password_hash << "\n"
+             << "Groups: ";
+
+        for (const auto& [group, is_admin] : user.groups) {
+            cout << group;
+            if (is_admin) cout << "*";
+            cout << " ";
         }
+        cout << "\n----------------------------------------\n";
     }
-    
-    return groups;
 }
 
 int main() {
-    auto users = read_passwd();
-
-    for (const auto& user : users) {
-        cout << "Username: " << user.username << "\n";
-        cout << "UID: " << user.uid << "\n";
-        cout << "GID: " << user.gid << "\n";
-        cout << "Home directory: " << user.home_dir << "\n";
-        
-        auto groups = get_user_groups(user.username);
-        cout << "Groups: ";
-        bool is_admin = false;
-        
-        for (const auto& group : groups) {
-            cout << group << " ";
-            if (group == "sudo" || group == "wheel") {
-                is_admin = true;
-            }
-        }
-        
-        if (is_admin) {
-            cout << "\nStatus: ADMINISTRATOR";
-        }
-        
-        cout << "\n\n";
+    bool try_shadow = (geteuid() == 0);
+    
+    if (!try_shadow) {
+        cout << "Note: Running with normal privileges. Password hashes will be hidden.\n"
+             << "To see all information, run with sudo or set SUID bit (not recommended).\n\n";
     }
+
+    auto users = get_users_info(try_shadow);
+    print_users_info(users);
 
     return 0;
 }
